@@ -2,16 +2,39 @@ import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
 
 export async function GET(request: Request) {
-  const supabase = await createRouteHandlerClient();
   const requestUrl = new URL(request.url);
-  const next = requestUrl.searchParams.get("next") ?? "/";
   const code = requestUrl.searchParams.get("code");
+  const next = requestUrl.searchParams.get("next") ?? "/";
+  const redirectTo = new URL(next.startsWith("/") ? next : "/", requestUrl.origin);
 
-  if (!supabase || !code) {
-    return NextResponse.redirect(new URL(next, request.url));
+  if (!code) {
+    return NextResponse.redirect(redirectTo);
   }
 
-  await supabase.auth.exchangeCodeForSession(code);
+  try {
+    const supabase = await createRouteHandlerClient();
 
-  return NextResponse.redirect(new URL(next, request.url));
+    if (!supabase) {
+      console.error("Auth callback error: Supabase route handler client was not created");
+      return NextResponse.redirect(
+        new URL("/login?error=supabase_client_missing", requestUrl.origin),
+      );
+    }
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      console.error("Auth callback exchangeCodeForSession error:", error.message);
+      return NextResponse.redirect(
+        new URL(`/login?error=${encodeURIComponent(error.message)}`, requestUrl.origin),
+      );
+    }
+
+    return NextResponse.redirect(redirectTo);
+  } catch (error) {
+    console.error("Auth callback unexpected error:", error);
+    return NextResponse.redirect(
+      new URL("/login?error=auth_callback_failed", requestUrl.origin),
+    );
+  }
 }
