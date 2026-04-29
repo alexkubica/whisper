@@ -15,6 +15,9 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.signInWithOAuth({
     options: {
       redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      queryParams: {
+        prompt: "select_account",
+      },
     },
     provider: "google",
   });

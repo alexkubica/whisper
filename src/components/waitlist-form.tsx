@@ -31,13 +31,21 @@ const copy = {
   },
 } satisfies Record<Locale, unknown>;
 
-export function WaitlistForm({ locale }: { locale: Locale }) {
+export function WaitlistForm({
+  hideToggle = false,
+  locale,
+  startOpen = false,
+}: {
+  hideToggle?: boolean;
+  locale: Locale;
+  startOpen?: boolean;
+}) {
   const t = copy[locale];
   const [contact, setContact] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(startOpen);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,13 +91,15 @@ export function WaitlistForm({ locale }: { locale: Locale }) {
 
   return (
     <div className="space-y-4">
-      <button
-        className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-sky-400 px-5 text-sm font-medium text-slate-950 transition hover:bg-sky-300"
-        onClick={() => setIsOpen((current) => !current)}
-        type="button"
-      >
-        {t.cta}
-      </button>
+      {!hideToggle ? (
+        <button
+          className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-sky-400 px-5 text-sm font-medium text-slate-950 transition hover:bg-sky-300"
+          onClick={() => setIsOpen((current) => !current)}
+          type="button"
+        >
+          {t.cta}
+        </button>
+      ) : null}
 
       {isOpen ? (
         <form className="space-y-3" onSubmit={handleSubmit}>

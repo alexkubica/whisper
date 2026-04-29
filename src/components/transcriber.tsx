@@ -144,6 +144,25 @@ function CloseIcon() {
   );
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`size-4 transition ${open ? "rotate-180" : ""}`}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="m6 9 6 6 6-6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
 const copy = {
   en: {
     shareStatus: {
@@ -178,11 +197,11 @@ const copy = {
     playbackNotSaved: "Transcription works, but file playback is not saved yet.",
     working: "Working...",
     transcribe: "Transcribe",
-    transcript: "Current upload",
-    transcriptPlaceholder: "The next transcript will appear here.",
+    transcript: "Transcript",
+    transcriptPlaceholder: "Your transcript will appear here.",
     copyTranscript: "Copy transcript",
     copied: "Copied",
-    addFileToSeeTranscript: "Add a file to see the transcript.",
+    addFileToSeeTranscript: "Choose a file to get started.",
     recent: "Recent",
     recentHintSignedIn: "Your latest transcripts.",
     recentHintSignedOut: "Sign in to save transcripts.",
@@ -211,7 +230,7 @@ const copy = {
     deleteFailed: "המחיקה נכשלה.",
     deleteUnavailable: "אי אפשר למחוק תמלולים כרגע.",
     title: "הופכים הודעה קולית לטקסט",
-    signOut: "התנתק",
+    signOut: "להתנתק",
     signIn: "התחברות",
     signInNotConfigured: "התחברות עדיין לא מוגדרת.",
     upload: "העלאה",
@@ -224,11 +243,11 @@ const copy = {
     playbackNotSaved: "התמלול יעבוד, אבל שמירת הניגון של הקובץ עדיין לא מוכנה.",
     working: "מעבד...",
     transcribe: "לתמלל",
-    transcript: "התמלול הנוכחי",
-    transcriptPlaceholder: "התמלול הבא יופיע כאן.",
+    transcript: "תמלול",
+    transcriptPlaceholder: "התמלול יופיע כאן.",
     copyTranscript: "העתקת תמלול",
     copied: "הועתק",
-    addFileToSeeTranscript: "הוסיפו קובץ כדי לראות את התמלול.",
+    addFileToSeeTranscript: "בחרו קובץ כדי להתחיל.",
     recent: "אחרונים",
     recentHintSignedIn: "התמלולים האחרונים שלכם.",
     recentHintSignedOut: "התחברו כדי לשמור תמלולים.",
@@ -263,6 +282,10 @@ export function Transcriber({
     initialSelectedHistoryId,
   );
   const [copyState, setCopyState] = useState<string | null>(null);
+  const [overflowingHistoryIds, setOverflowingHistoryIds] = useState<
+    Record<string, boolean>
+  >({});
+  const historyPreviewRefs = useRef<Record<string, HTMLSpanElement | null>>({});
 
   const shareStatusMessage = useMemo(() => {
     return shareStatus
@@ -351,6 +374,36 @@ export function Transcriber({
     const timeout = window.setTimeout(() => setCopyState(null), 1200);
     return () => window.clearTimeout(timeout);
   }, [copyState]);
+
+  useEffect(() => {
+    function updateOverflowState() {
+      setOverflowingHistoryIds((current) => {
+        const next = { ...current };
+        let changed = false;
+
+        for (const item of history) {
+          const element = historyPreviewRefs.current[item.id];
+          const isOverflowing = element
+            ? element.scrollHeight > element.clientHeight + 1
+            : false;
+
+          if (next[item.id] !== isOverflowing) {
+            next[item.id] = isOverflowing;
+            changed = true;
+          }
+        }
+
+        return changed ? next : current;
+      });
+    }
+
+    updateOverflowState();
+    window.addEventListener("resize", updateOverflowState);
+
+    return () => {
+      window.removeEventListener("resize", updateOverflowState);
+    };
+  }, [history]);
 
   function handlePickedFile(nextFile: File | null) {
     setFile(nextFile);
@@ -453,6 +506,14 @@ export function Transcriber({
 
     setError(null);
     setNotice(t.deleteUnavailable);
+  }
+
+  function toggleHistoryItem(itemId: string, canExpand: boolean) {
+    if (!canExpand) {
+      return;
+    }
+
+    setSelectedHistoryId((current) => (current === itemId ? null : itemId));
   }
 
   return (
@@ -707,40 +768,59 @@ export function Transcriber({
         </div>
 
         {history.length > 0 ? (
-          <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-            <div className="grid gap-3">
-              {history.map((item) => (
+          <div className="mt-5 grid gap-3">
+            {history.map((item) => {
+              const canExpand = overflowingHistoryIds[item.id] ?? false;
+              const isOpen = item.id === selectedHistoryId;
+
+              return (
                 <article
                   key={item.id}
-                  className={`rounded-[1.5rem] border p-4 transition ${
-                    item.id === selectedHistoryId
-                      ? "border-slate-950 bg-slate-950 text-white shadow-[0_14px_40px_rgba(15,23,42,0.16)]"
+                  className={`min-w-0 rounded-[1.5rem] border p-4 transition ${
+                    isOpen
+                      ? "border-sky-300 bg-[linear-gradient(180deg,#f3f8ff_0%,#eaf2ff_100%)] text-slate-950 shadow-[0_14px_40px_rgba(56,95,173,0.14)]"
                       : "border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] text-slate-900 hover:border-slate-300"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-start justify-between gap-4">
                     <button
                       className="min-w-0 flex-1 text-left"
                       onClick={() => {
-                        setSelectedHistoryId(item.id);
+                        toggleHistoryItem(item.id, canExpand);
                       }}
                       type="button"
                     >
                       <p className="truncate text-sm font-medium">{item.fileName}</p>
                       <p
                         className={`mt-1 text-xs ${
-                          item.id === selectedHistoryId ? "text-white/60" : "text-slate-500"
+                          isOpen ? "text-slate-500" : "text-slate-500"
                         }`}
                       >
                         {formatDate(item.createdAt, locale)} · {formatBytes(item.size)}
                       </p>
                     </button>
-                    <div className="flex items-center gap-2">
+                    <div className="shrink-0 flex items-center gap-2">
+                      {canExpand ? (
+                        <button
+                          aria-label={isOpen ? "Collapse transcript" : "Expand transcript"}
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                            isOpen
+                              ? "border-sky-200 bg-white/75 text-slate-700 hover:bg-white"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                          onClick={() => {
+                            toggleHistoryItem(item.id, true);
+                          }}
+                          type="button"
+                        >
+                          <ChevronIcon open={isOpen} />
+                        </button>
+                      ) : null}
                       <button
                         aria-label={`${t.copyTranscript} ${item.fileName}`}
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
-                          item.id === selectedHistoryId
-                            ? "border-white/15 bg-white/10 text-white hover:bg-white/16"
+                          isOpen
+                            ? "border-sky-200 bg-white/75 text-slate-700 hover:bg-white"
                             : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                         }`}
                         onClick={() => copyText(item.id, item.text)}
@@ -752,8 +832,8 @@ export function Transcriber({
                       <button
                         aria-label={`${t.delete} ${item.fileName}`}
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
-                          item.id === selectedHistoryId
-                            ? "border-white/15 bg-white/10 text-white hover:bg-white/16"
+                          isOpen
+                            ? "border-sky-200 bg-white/75 text-slate-700 hover:bg-white"
                             : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                         }`}
                         onClick={() => deleteRecording()}
@@ -764,84 +844,57 @@ export function Transcriber({
                       </button>
                     </div>
                   </div>
+
+                  {item.recordingUrl ? (
+                    <div className="mt-4">
+                      {item.mimeType.startsWith("video/") ? (
+                        <video
+                          className="max-h-72 w-full rounded-[1.25rem] bg-slate-950"
+                          controls
+                          preload="metadata"
+                          src={item.recordingUrl}
+                        />
+                      ) : (
+                        <audio
+                          className="w-full"
+                          controls
+                          preload="metadata"
+                          src={item.recordingUrl}
+                        />
+                      )}
+                    </div>
+                  ) : null}
+
                   <button
-                    className={`mt-4 block w-full text-left text-sm leading-7 ${
-                      item.id === selectedHistoryId ? "text-white/88" : "text-slate-600"
+                    className={`mt-4 block min-w-0 w-full text-left text-sm leading-7 ${
+                      isOpen ? "text-slate-700" : "text-slate-600"
                     }`}
                     dir={item.isRtl ? "rtl" : "ltr"}
                     onClick={() => {
-                      setSelectedHistoryId(item.id);
+                      toggleHistoryItem(item.id, canExpand);
                     }}
                     type="button"
                   >
-                    <span className="line-clamp-4 whitespace-pre-wrap">{item.text}</span>
+                    {isOpen ? (
+                      <div
+                        className="max-h-80 overflow-x-hidden overflow-y-auto break-words whitespace-pre-wrap"
+                      >
+                        {item.text}
+                      </div>
+                    ) : (
+                      <span
+                        className={`${canExpand ? "line-clamp-4" : ""} break-words whitespace-pre-wrap`}
+                        ref={(element) => {
+                          historyPreviewRefs.current[item.id] = element;
+                        }}
+                      >
+                        {item.text}
+                      </span>
+                    )}
                   </button>
                 </article>
-              ))}
-            </div>
-
-            <div className="flex min-h-[24rem] flex-col rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,#fcfdff_0%,#f5f8ff_100%)] p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-semibold tracking-[-0.04em] text-slate-950">
-                    {selectedHistoryItem?.fileName ?? t.transcript}
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {selectedHistoryItem
-                      ? `${formatDate(selectedHistoryItem.createdAt, locale)} · ${formatBytes(selectedHistoryItem.size)}`
-                      : t.recentPreviewPlaceholder}
-                  </p>
-                </div>
-                {selectedHistoryItem ? (
-                  <button
-                    aria-label={t.copyTranscript}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                    onClick={() => copyText(selectedHistoryItem.id, selectedHistoryItem.text)}
-                    title={copyState === selectedHistoryItem.id ? t.copied : t.copyTranscript}
-                    type="button"
-                  >
-                    <CopyIcon />
-                  </button>
-                ) : null}
-              </div>
-
-              {selectedHistoryItem?.recordingUrl ? (
-                <div className="mt-5">
-                  {selectedHistoryItem.mimeType.startsWith("video/") ? (
-                    <video
-                      className="max-h-72 w-full rounded-[1.25rem] bg-slate-950"
-                      controls
-                      preload="metadata"
-                      src={selectedHistoryItem.recordingUrl}
-                    />
-                  ) : (
-                    <audio
-                      className="w-full"
-                      controls
-                      preload="metadata"
-                      src={selectedHistoryItem.recordingUrl}
-                    />
-                  )}
-                </div>
-              ) : null}
-
-              {selectedHistoryItem ? (
-                <div className="mt-5 flex-1 rounded-[1.25rem] border border-slate-200 bg-white/75 p-1">
-                  <textarea
-                    className={`min-h-[18rem] w-full resize-none rounded-[1rem] bg-transparent px-4 py-4 text-sm leading-8 text-slate-800 outline-none sm:text-[15px] ${
-                      selectedHistoryItem.isRtl ? "text-right" : "text-left"
-                    }`}
-                    dir={selectedHistoryItem.isRtl ? "rtl" : "ltr"}
-                    readOnly
-                    value={selectedHistoryItem.text}
-                  />
-                </div>
-              ) : (
-                <div className="mt-5 flex flex-1 items-center justify-center rounded-[1.25rem] border border-dashed border-slate-200 bg-white/65 px-6 text-center text-sm leading-7 text-slate-500">
-                  {t.recentPreviewPlaceholder}
-                </div>
-              )}
-            </div>
+              );
+            })}
           </div>
         ) : (
           <div className="mt-5 rounded-[1.5rem] border border-dashed border-slate-200 bg-[linear-gradient(180deg,#fbfdff_0%,#f4f7ff_100%)] px-4 py-10 text-center text-sm text-slate-500">

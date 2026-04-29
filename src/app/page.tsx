@@ -123,13 +123,13 @@ export default async function Home() {
       dir={getDirection(locale)}
     >
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-6 sm:px-8 lg:px-10">
-        <header className="flex items-center justify-between py-4">
+        <header className="flex flex-wrap items-center justify-between gap-3 py-4">
           <Link className="text-lg font-semibold tracking-[-0.04em]" href="/">
             Miluli
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <Link
-              className="hidden rounded-full px-4 py-2 text-sm text-slate-600 transition hover:bg-white/70 sm:inline-flex"
+              className="inline-flex rounded-full px-4 py-2 text-sm text-slate-600 transition hover:bg-white/70"
               href="/app"
             >
               {t.appLink}
