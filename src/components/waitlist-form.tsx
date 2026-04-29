@@ -8,37 +8,26 @@ type WaitlistResponse = {
   error?: string;
 };
 
-function looksLikeEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function looksLikePhone(value: string) {
-  const digits = value.replace(/[^\d+]/g, "");
-  return digits.length >= 9;
-}
-
 const copy = {
   en: {
-    empty: "Enter an email or phone number.",
-    invalid: "Enter a valid email or phone number.",
+    empty: "Leave a way to reach you.",
     failed: "Signup failed.",
     success: "You're on the list. We'll let you know when it opens.",
     cta: "Get access",
-    body: "This is a waitlist for now. Leave an email or phone number and we’ll reach out when subscriptions open.",
+    body: "Leave contact details and we’ll reach out when subscriptions open.",
     placeholder: "Email or phone",
     submitting: "Sending...",
-    submit: "Join waitlist",
+    submit: "Send details",
   },
   he: {
-    empty: "הכניסו אימייל או מספר טלפון.",
-    invalid: "הכניסו אימייל תקין או מספר טלפון.",
+    empty: "השאירו דרך ליצור קשר.",
     failed: "ההרשמה נכשלה.",
     success: "נרשמתם. נעדכן כשנפתח.",
-    cta: "רוצים להצטרף",
-    body: "כרגע זו רשימת המתנה. השאירו אימייל או טלפון ונעדכן כשנפתח.",
+    cta: "אני רוצה!",
+    body: "השיארו פרטים ונעדכן כשהגישה תפתח",
     placeholder: "אימייל או טלפון",
     submitting: "שולחים...",
-    submit: "להצטרף לרשימה",
+    submit: "שלח פרטים",
   },
 } satisfies Record<Locale, unknown>;
 
@@ -57,11 +46,6 @@ export function WaitlistForm({ locale }: { locale: Locale }) {
 
     if (!value) {
       setError(t.empty);
-      return;
-    }
-
-    if (!looksLikeEmail(value) && !looksLikePhone(value)) {
-      setError(t.invalid);
       return;
     }
 
@@ -113,9 +97,9 @@ export function WaitlistForm({ locale }: { locale: Locale }) {
           <label className="block">
             <span className="sr-only">{t.placeholder}</span>
             <input
-              autoComplete="email"
+              autoComplete="off"
               className="h-12 w-full rounded-full border border-white/12 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-400"
-              inputMode="email"
+              inputMode="text"
               onChange={(event) => setContact(event.target.value)}
               placeholder={t.placeholder}
               type="text"

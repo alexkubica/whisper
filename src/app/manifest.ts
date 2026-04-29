@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Whisper",
-    short_name: "Whisper",
+    name: "Miluli",
+    short_name: "Miluli",
     description: "הופכים הודעות קוליות ארוכות לטקסט.",
     start_url: "/",
     scope: "/",
@@ -13,17 +13,17 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       {
         src: "/pwa-icon-192.png",
-        sizes: "1254x1254",
+        sizes: "192x192",
         type: "image/png",
       },
       {
         src: "/pwa-icon-512.png",
-        sizes: "1254x1254",
+        sizes: "512x512",
         type: "image/png",
       },
       {
         src: "/pwa-icon-512.png",
-        sizes: "1254x1254",
+        sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
       },

@@ -16,17 +16,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Whisper",
+  title: "Miluli",
   description: "הופכים הודעות קוליות ארוכות לטקסט.",
   icons: {
     icon: [
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icon.png", sizes: "1254x1254", type: "image/png" },
+      { url: "/icon.png", sizes: "1024x1024", type: "image/png" },
     ],
     apple: [
       {
         url: "/apple-touch-icon.png",
-        sizes: "1254x1254",
+        sizes: "180x180",
         type: "image/png",
       },
     ],
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Whisper",
+    title: "Miluli",
   },
 };
 

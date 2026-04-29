@@ -12,31 +12,30 @@ const copy = {
   en: {
     appLink: "Open app",
     planLink: "Pricing",
-    eyebrow: "For voice notes that run too long",
-    titleA: "Read the message.",
-    titleB: "Skip the replay.",
+    eyebrow: "Audio to text",
+    titleA: "Transcribe audio.",
+    titleB: "Read the text.",
     intro:
-      "Whisper turns long WhatsApp voice notes into text so you can catch the point faster, skim first, and move on.",
+      "Miluli turns audio and voice notes into text.",
     ctaPrimary: "See pricing",
-    ctaSecondary: "Preview app",
-    sideTitle: "A calmer way to catch up",
+    sideTitle: "What it does",
     outcomeCards: [
-      "Turn long WhatsApp voice notes into clean text.",
-      "Catch the point in seconds instead of replaying minutes.",
-      "Skim first. Listen only when it matters.",
+      "Upload audio or video.",
+      "Get a clean transcript.",
+      "Copy the text and move on.",
     ],
     features: [
       {
-        title: "Catch up faster",
-        body: "Read the point of a 6 minute note at a glance.",
+        title: "Upload",
+        body: "Pick an audio or video file from your device.",
       },
       {
-        title: "Less interruption",
-        body: "Check voice notes quietly in meetings, on the move, or anywhere else.",
+        title: "Transcribe",
+        body: "Miluli turns the recording into text.",
       },
       {
-        title: "More clarity",
-        body: "Pull out names, times, tasks, and decisions without scrubbing audio.",
+        title: "Copy",
+        body: "Take the transcript wherever you need it.",
       },
     ],
     pricingEyebrow: "Pricing",
@@ -48,7 +47,7 @@ const copy = {
       "Enough for the voice notes that pile up in family, work, and group chats.",
       "Built for the moments when reading is simply faster than listening.",
     ],
-    cardPlan: "Whisper personal",
+    cardPlan: "Miluli personal",
     cardBadge: "Monthly plan",
     cardPeriod: "per month",
     line1Label: "Monthly transcription",
@@ -60,32 +59,31 @@ const copy = {
   },
   he: {
     appLink: "לאפליקציה",
-    planLink: "מסלול",
-    eyebrow: "בשביל הודעות קוליות שפשוט נמשכות יותר מדי",
-    titleA: "קוראים את ההודעה.",
-    titleB: "מדלגים על כל ההאזנה מחדש.",
+    planLink: "מחירון",
+    eyebrow: "אודיו לטקסט",
+    titleA: "מתמללים אודיו.",
+    titleB: "קוראים טקסט.",
     intro:
-      "Whisper הופך הקלטות ארוכות בוואטסאפ לטקסט, כדי שתוכלו להבין מהר מה חשוב, לסרוק, ולהמשיך הלאה.",
-    ctaPrimary: "לראות מחיר",
-    ctaSecondary: "תצוגה מקדימה",
-    sideTitle: "דרך שקטה יותר להדביק את הקצב",
+      "Miluli הופך אודיו והודעות קוליות לטקסט.",
+    ctaPrimary: "כמה זה עולה?",
+    sideTitle: "מה זה עושה",
     outcomeCards: [
-      "הופך הודעות קוליות ארוכות בוואטסאפ לטקסט נקי.",
-      "מבינים את העיקר תוך שניות במקום לשמוע הכל מהתחלה.",
-      "קוראים קודם. מאזינים רק אם באמת צריך.",
+      "מעלים אודיו או וידאו.",
+      "מקבלים תמלול נקי.",
+      "מעתיקים את הטקסט וממשיכים.",
     ],
     features: [
       {
-        title: "להבין מהר יותר",
-        body: "רואים את הנקודה של הודעה בת 6 דקות במבט אחד.",
+        title: "מעלים",
+        body: "בוחרים קובץ אודיו או וידאו מהמכשיר.",
       },
       {
-        title: "פחות הפרעה",
-        body: "בודקים הודעות קוליות בשקט, בישיבה, בדרך או בכל מקום אחר.",
+        title: "מתמללים",
+        body: "Miluli הופך את ההקלטה לטקסט.",
       },
       {
-        title: "יותר בהירות",
-        body: "מוצאים שמות, שעות, משימות והחלטות בלי לחפש בתוך האודיו.",
+        title: "מעתיקים",
+        body: "לוקחים את התמלול לכל מקום שצריך.",
       },
     ],
     pricingEyebrow: "מחיר",
@@ -97,7 +95,7 @@ const copy = {
       "מספיק להודעות הקוליות שמצטברות במשפחה, בעבודה ובקבוצות.",
       "מיועד לרגעים שבהם לקרוא פשוט מהיר יותר מלשמוע.",
     ],
-    cardPlan: "Whisper אישי",
+    cardPlan: "Miluli אישי",
     cardBadge: "חבילה חודשית",
     cardPeriod: "לחודש",
     line1Label: "תמלול חודשי",
@@ -127,7 +125,7 @@ export default async function Home() {
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-6 sm:px-8 lg:px-10">
         <header className="flex items-center justify-between py-4">
           <Link className="text-lg font-semibold tracking-[-0.04em]" href="/">
-            Whisper
+            Miluli
           </Link>
           <div className="flex items-center gap-3">
             <Link
@@ -185,12 +183,6 @@ export default async function Home() {
                 >
                   {t.ctaPrimary}
                 </a>
-                <Link
-                  className="inline-flex min-h-12 items-center rounded-full border border-slate-200 bg-white/80 px-6 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white"
-                  href="/app"
-                >
-                  {t.ctaSecondary}
-                </Link>
               </div>
             </div>
 

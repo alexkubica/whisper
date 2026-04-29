@@ -4,8 +4,8 @@ import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") ?? "/";
-  const redirectTo = new URL(next.startsWith("/") ? next : "/", requestUrl.origin);
+  const next = requestUrl.searchParams.get("next") ?? "/app";
+  const redirectTo = new URL(next.startsWith("/") ? next : "/app", requestUrl.origin);
 
   if (!code) {
     return NextResponse.redirect(redirectTo);

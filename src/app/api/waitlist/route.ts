@@ -4,27 +4,31 @@ import { hasDatabaseUrl } from "@/lib/env";
 import { LOCALE_COOKIE, type Locale, isLocale } from "@/lib/locale";
 import { NextResponse } from "next/server";
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function isValidPhone(value: string) {
-  const normalized = value.replace(/[^\d+]/g, "");
-  return normalized.length >= 9;
-}
+const MAX_SUBMISSIONS_PER_IP = 3;
+const waitlistSubmissionsByIp = new Map<string, number>();
 
 const copy = {
   en: {
     notReady: "Waitlist is not configured yet.",
-    invalid: "Enter a valid email or phone number.",
+    invalid: "Enter something so we can reach you.",
     failed: "Signup failed.",
   },
   he: {
     notReady: "רשימת ההמתנה עדיין לא מוכנה.",
-    invalid: "הכניסו אימייל תקין או מספר טלפון.",
+    invalid: "השאירו משהו כדי שנוכל לחזור אליכם.",
     failed: "ההרשמה נכשלה.",
   },
 } satisfies Record<Locale, unknown>;
+
+function getClientIp(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim() || "unknown";
+  }
+
+  return request.headers.get("x-real-ip") ?? "unknown";
+}
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -42,12 +46,23 @@ export async function POST(request: Request) {
   const body = (await request.json()) as { contact?: string };
   const contact = body.contact?.trim() ?? "";
 
-  if (!contact || (!isValidEmail(contact) && !isValidPhone(contact))) {
+  if (!contact) {
     return NextResponse.json({ error: t.invalid }, { status: 400 });
   }
 
   try {
+    const ip = getClientIp(request);
+    const currentCount = waitlistSubmissionsByIp.get(ip) ?? 0;
+
+    if (currentCount >= MAX_SUBMISSIONS_PER_IP) {
+      return NextResponse.json({
+        success: true,
+        duplicate: true,
+      });
+    }
+
     const created = await createWaitlistSignup(contact);
+    waitlistSubmissionsByIp.set(ip, currentCount + 1);
 
     return NextResponse.json({
       success: true,

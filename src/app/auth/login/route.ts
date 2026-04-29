@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const origin = url.origin;
-  const next = url.searchParams.get("next") ?? "/";
+  const next = url.searchParams.get("next") ?? "/app";
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     options: {
