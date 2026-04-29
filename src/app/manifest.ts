@@ -2,28 +2,28 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Transcribe",
-    short_name: "Transcribe",
-    description: "Upload, transcribe, and revisit saved audio or video files.",
+    name: "Whisper",
+    short_name: "Whisper",
+    description: "הופכים הודעות קוליות ארוכות לטקסט.",
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#ece6d8",
-    theme_color: "#17120d",
+    background_color: "#f4f8ff",
+    theme_color: "#0f172a",
     icons: [
       {
         src: "/pwa-icon-192.png",
-        sizes: "192x192",
+        sizes: "1254x1254",
         type: "image/png",
       },
       {
         src: "/pwa-icon-512.png",
-        sizes: "512x512",
+        sizes: "1254x1254",
         type: "image/png",
       },
       {
         src: "/pwa-icon-512.png",
-        sizes: "512x512",
+        sizes: "1254x1254",
         type: "image/png",
         purpose: "maskable",
       },

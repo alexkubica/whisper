@@ -1,5 +1,13 @@
 import { desc } from "drizzle-orm";
-import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 export const transcriptions = pgTable(
   "transcriptions",
@@ -25,6 +33,19 @@ export const transcriptions = pgTable(
       desc(table.createdAt),
     ),
   ],
+);
+
+export const waitlistSignups = pgTable(
+  "waitlist_signups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    contact: text("contact").notNull(),
+    kind: text("kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [uniqueIndex("waitlist_signups_contact_idx").on(table.contact)],
 );
 
 export type TranscriptionRecord = typeof transcriptions.$inferSelect;

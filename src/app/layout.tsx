@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Manrope } from "next/font/google";
+import { cookies } from "next/headers";
+import { Geist_Mono, Instrument_Sans } from "next/font/google";
 import { PwaRegister } from "@/components/pwa-register";
+import { LOCALE_COOKIE, getDirection, isLocale } from "@/lib/locale";
 import "./globals.css";
 
-const manrope = Manrope({
-  variable: "--font-manrope",
+const instrumentSans = Instrument_Sans({
+  variable: "--font-instrument-sans",
   subsets: ["latin"],
 });
 
@@ -14,31 +16,42 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Transcribe",
-  description: "Minimal upload-to-transcript app.",
+  title: "Whisper",
+  description: "הופכים הודעות קוליות ארוכות לטקסט.",
   icons: {
     icon: [
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon.png", sizes: "1254x1254", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "1254x1254",
+        type: "image/png",
+      },
+    ],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Transcribe",
+    title: "Whisper",
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const localeValue = cookieStore.get(LOCALE_COOKIE)?.value;
+  const locale = isLocale(localeValue) ? localeValue : "en";
+
   return (
     <html
-      lang="en"
-      className={`${manrope.variable} ${geistMono.variable} h-full antialiased`}
+      dir={getDirection(locale)}
+      lang={locale}
+      className={`${instrumentSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <PwaRegister />

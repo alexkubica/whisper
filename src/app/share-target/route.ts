@@ -12,11 +12,11 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 function redirectWithStatus(request: Request, status: string) {
-  return NextResponse.redirect(new URL(`/?share=${status}`, request.url));
+  return NextResponse.redirect(new URL(`/app?share=${status}`, request.url));
 }
 
 export async function GET(request: Request) {
-  return NextResponse.redirect(new URL("/", request.url));
+  return NextResponse.redirect(new URL("/app", request.url));
 }
 
 export async function POST(request: Request) {
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
     return NextResponse.redirect(
       new URL(
         payload.historyItem?.id
-          ? `/?selected=${payload.historyItem.id}&share=ok`
-          : "/?share=ok",
+          ? `/app?selected=${payload.historyItem.id}&share=ok`
+          : "/app?share=ok",
         request.url,
       ),
     );

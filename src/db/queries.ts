@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "./client";
-import { transcriptions } from "./schema";
+import { transcriptions, waitlistSignups } from "./schema";
 
 export async function listRecentTranscriptionsByUser(
   userId: string,
@@ -69,4 +69,29 @@ export async function getTranscriptionRecordById(id: string, userId: string) {
       where: and(eq(transcriptions.id, id), eq(transcriptions.userId, userId)),
     }) ?? null
   );
+}
+
+function normalizeWaitlistContact(contact: string) {
+  const trimmed = contact.trim();
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+
+  return {
+    contact: isEmail ? trimmed.toLowerCase() : trimmed,
+    kind: isEmail ? "email" : "phone",
+  };
+}
+
+export async function createWaitlistSignup(contact: string) {
+  const db = getDb();
+  const normalized = normalizeWaitlistContact(contact);
+
+  const [row] = await db
+    .insert(waitlistSignups)
+    .values(normalized)
+    .onConflictDoNothing({
+      target: waitlistSignups.contact,
+    })
+    .returning();
+
+  return row ?? null;
 }
