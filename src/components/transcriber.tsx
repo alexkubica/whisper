@@ -1,9 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryItem } from "@/lib/history";
 import type { Locale } from "@/lib/locale";
+import Link from "next/link";
+import {
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 const ACCEPTED_TYPES = [
   ".aac",
@@ -20,9 +26,6 @@ const ACCEPTED_TYPES = [
   ".webm",
 ];
 
-const MAX_VERCEL_UPLOAD_MB = 4.5;
-const MAX_VERCEL_UPLOAD_BYTES = MAX_VERCEL_UPLOAD_MB * 1024 * 1024;
-
 type TranscriberProps = {
   authEnabled: boolean;
   historyEnabled: boolean;
@@ -35,12 +38,21 @@ type TranscriberProps = {
   userEmail: string | null;
 };
 
-type TranscribeResult = {
-  text: string;
-  fileName: string;
-  mimeType: string;
-  size: number;
-  historyItem: HistoryItem | null;
+type CreateJobResponse = {
+  item: HistoryItem;
+  upload: {
+    path: string;
+    signedUrl: string;
+    token: string;
+  };
+};
+
+type JobResponse = {
+  item: HistoryItem;
+};
+
+type JobsResponse = {
+  items: HistoryItem[];
 };
 
 function formatBytes(bytes: number) {
@@ -54,7 +66,7 @@ function formatDate(value: string, locale: Locale) {
   }).format(new Date(value));
 }
 
-function getFileKind(file: File | null) {
+function getFileKind(file: { name: string; type: string } | null) {
   if (!file) {
     return null;
   }
@@ -76,8 +88,50 @@ function getFileKind(file: File | null) {
   return "audio";
 }
 
+function isTerminalStatus(status: string) {
+  return status === "completed" || status === "failed";
+}
+
 async function parseJson<T>(response: Response) {
   return (await response.json()) as T;
+}
+
+function uploadFileToSignedUrl(
+  signedUrl: string,
+  file: File,
+  onProgress: (progress: number) => void,
+) {
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PUT", signedUrl);
+
+    request.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+
+      onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    });
+
+    request.addEventListener("error", () => {
+      reject(new Error("Upload failed."));
+    });
+
+    request.addEventListener("load", () => {
+      if (request.status >= 200 && request.status < 300) {
+        onProgress(100);
+        resolve();
+        return;
+      }
+
+      reject(new Error("Upload failed."));
+    });
+
+    const formData = new FormData();
+    formData.append("cacheControl", "3600");
+    formData.append("", file);
+    request.send(formData);
+  });
 }
 
 function CopyIcon() {
@@ -166,97 +220,115 @@ function ChevronIcon({ open }: { open: boolean }) {
 const copy = {
   en: {
     shareStatus: {
-      ok: "Shared file received.",
+      ok: "Shared file queued.",
       "signin-required": "Sign in to open shared files.",
       "missing-file": "No file was shared.",
       "unsupported-file": "That file could not be opened.",
-      "file-too-large": "That file is too large to upload here.",
+      "file-too-large": "That shared file is too large. Open the app to upload it there.",
       "config-error": "Uploads are not ready yet.",
       "transcription-error": "That file could not be transcribed.",
     },
     copyFailed: "Copy failed.",
     copySuccess: "Transcript copied.",
     signInToTranscribe: "Sign in to transcribe.",
-    chooseOrPaste: "Choose a file.",
-    fileTooLarge: `Files over ${MAX_VERCEL_UPLOAD_MB}MB cannot be uploaded here.`,
+    chooseFile: "Choose a file.",
     transcribeFailed: "Transcription failed.",
     deletePrompt: "Delete this transcript?",
     deleteFailed: "Delete failed.",
-    deleteUnavailable: "Deleting transcripts is not available.",
     title: "Turn a voice note into text",
     signOut: "Sign out",
     signIn: "Sign in",
     signInNotConfigured: "Sign-in is not configured yet.",
     upload: "Upload",
-    uploadHint: "Audio or video, straight from your device.",
+    uploadHint: "Audio or video, kept for playback, audio extracted for transcription.",
     pickFile: "Pick audio or video",
     clearFile: "Remove file",
-    tooLargeBadge: "Too large",
     uploadsNotReady: "Uploads are not configured yet.",
     signInBeforeUploading: "Sign in before uploading.",
-    playbackNotSaved: "Transcription works, but file playback is not saved yet.",
-    working: "Working...",
-    transcribe: "Transcribe",
+    playbackNotSaved: "Playback storage is not configured yet.",
+    working: "Starting...",
+    uploading: "Uploading...",
+    transcribe: "Upload and transcribe",
     transcript: "Transcript",
     transcriptPlaceholder: "Your transcript will appear here.",
     copyTranscript: "Copy transcript",
     copied: "Copied",
-    addFileToSeeTranscript: "Choose a file to get started.",
+    addFileToSeeTranscript: "Choose a file or open a recent job.",
     recent: "Recent",
-    recentHintSignedIn: "Your latest transcripts.",
+    recentHintSignedIn: "Completed and in-flight jobs stay here.",
     recentHintSignedOut: "Sign in to save transcripts.",
     recentPreviewPlaceholder: "Choose a recent transcript to view it here.",
-    delete: "Delete",
     noTranscripts: "No transcripts yet.",
     signInToKeepHistory: "Sign in to keep history.",
+    delete: "Delete",
+    queuedNotice: "Upload finished. Processing in the background.",
+    statusTitle: "Status",
+    statusHint: "This job keeps running after the page changes.",
+    statusLabels: {
+      uploading: "Uploading",
+      queued: "Queued",
+      extracting: "Extracting audio",
+      transcribing: "Transcribing",
+      completed: "Completed",
+      failed: "Failed",
+    },
   },
   he: {
     shareStatus: {
-      ok: "הקובץ המשותף התקבל.",
+      ok: "הקובץ המשותף נכנס לתור.",
       "signin-required": "צריך להתחבר כדי לפתוח קבצים משותפים.",
       "missing-file": "לא התקבל קובץ.",
       "unsupported-file": "לא הצלחנו לפתוח את הקובץ הזה.",
-      "file-too-large": "הקובץ גדול מדי להעלאה כאן.",
+      "file-too-large": "הקובץ המשותף גדול מדי. פתחו את האפליקציה והעלו משם.",
       "config-error": "העלאות עדיין לא מוגדרות.",
       "transcription-error": "לא הצלחנו לתמלל את הקובץ הזה.",
     },
     copyFailed: "ההעתקה נכשלה.",
     copySuccess: "התמלול הועתק.",
     signInToTranscribe: "צריך להתחבר כדי לתמלל.",
-    chooseOrPaste: "בחרו קובץ.",
-    fileTooLarge: `אי אפשר להעלות כאן קבצים מעל ${MAX_VERCEL_UPLOAD_MB}MB.`,
+    chooseFile: "בחרו קובץ.",
     transcribeFailed: "התמלול נכשל.",
     deletePrompt: "למחוק את התמלול הזה?",
     deleteFailed: "המחיקה נכשלה.",
-    deleteUnavailable: "אי אפשר למחוק תמלולים כרגע.",
     title: "הופכים הודעה קולית לטקסט",
     signOut: "להתנתק",
     signIn: "התחברות",
     signInNotConfigured: "התחברות עדיין לא מוגדרת.",
     upload: "העלאה",
-    uploadHint: "אודיו או וידאו, ישר מהמכשיר.",
+    uploadHint: "אודיו או וידאו נשמרים לניגון, והאודיו נשלף לתמלול.",
     pickFile: "בחירת אודיו או וידאו",
     clearFile: "הסרת קובץ",
-    tooLargeBadge: "גדול מדי",
     uploadsNotReady: "העלאות עדיין לא מוגדרות.",
     signInBeforeUploading: "צריך להתחבר לפני שמעלים.",
-    playbackNotSaved: "התמלול יעבוד, אבל שמירת הניגון של הקובץ עדיין לא מוכנה.",
-    working: "מעבד...",
-    transcribe: "לתמלל",
+    playbackNotSaved: "אחסון לניגון עדיין לא מוגדר.",
+    working: "מתחיל...",
+    uploading: "מעלה...",
+    transcribe: "להעלות ולתמלל",
     transcript: "תמלול",
     transcriptPlaceholder: "התמלול יופיע כאן.",
     copyTranscript: "העתקת תמלול",
     copied: "הועתק",
-    addFileToSeeTranscript: "בחרו קובץ כדי להתחיל.",
+    addFileToSeeTranscript: "בחרו קובץ או פתחו עבודה אחרונה.",
     recent: "אחרונים",
-    recentHintSignedIn: "התמלולים האחרונים שלכם.",
+    recentHintSignedIn: "גם עבודות בתהליך נשארות כאן.",
     recentHintSignedOut: "התחברו כדי לשמור תמלולים.",
     recentPreviewPlaceholder: "בחרו תמלול אחרון כדי לראות אותו כאן.",
-    delete: "מחיקה",
     noTranscripts: "עדיין אין תמלולים.",
     signInToKeepHistory: "התחברו כדי לשמור היסטוריה.",
+    delete: "מחיקה",
+    queuedNotice: "ההעלאה הסתיימה. העיבוד ממשיך ברקע.",
+    statusTitle: "סטטוס",
+    statusHint: "העבודה ממשיכה גם אם מרעננים או עוברים עמוד.",
+    statusLabels: {
+      uploading: "מעלה",
+      queued: "בתור",
+      extracting: "מחלץ אודיו",
+      transcribing: "מתמלל",
+      completed: "הושלם",
+      failed: "נכשל",
+    },
   },
-} satisfies Record<Locale, unknown>;
+} as const;
 
 export function Transcriber({
   authEnabled,
@@ -276,7 +348,6 @@ export function Transcriber({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [result, setResult] = useState<TranscribeResult | null>(null);
   const [history, setHistory] = useState(initialHistory);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(
     initialSelectedHistoryId,
@@ -285,6 +356,10 @@ export function Transcriber({
   const [overflowingHistoryIds, setOverflowingHistoryIds] = useState<
     Record<string, boolean>
   >({});
+  const [activeUploadJobId, setActiveUploadJobId] = useState<string | null>(null);
+  const [activeUploadProgress, setActiveUploadProgress] = useState<number | null>(
+    null,
+  );
   const historyPreviewRefs = useRef<Record<string, HTMLSpanElement | null>>({});
 
   const shareStatusMessage = useMemo(() => {
@@ -311,60 +386,29 @@ export function Transcriber({
     };
   }, [previewUrl]);
 
-  const fileTooLarge = useMemo(() => {
-    if (!file) {
-      return false;
-    }
-
-    return file.size > MAX_VERCEL_UPLOAD_BYTES;
-  }, [file]);
-
   const selectedHistoryItem = useMemo(
     () => history.find((item) => item.id === selectedHistoryId) ?? null,
     [history, selectedHistoryId],
   );
 
-  const currentText = result?.text ?? "";
-  const currentIsRtl = result?.historyItem?.isRtl ?? false;
-  const currentRecordingUrl = result?.historyItem?.recordingUrl ?? null;
-  const currentFileName = result?.fileName ?? "Transcript";
-  const currentMimeType = result?.mimeType ?? "";
-
-  useEffect(() => {
-    if (!selectedHistoryId) {
-      return;
-    }
-
-    let cancelled = false;
-
-    async function refreshSelectedRecording() {
-      try {
-        const response = await fetch(`/api/recordings/${selectedHistoryId}`, {
-          method: "GET",
-        });
-
-        const payload = await parseJson<{ item: HistoryItem } | { error: string }>(
-          response,
-        );
-
-        if (!response.ok || "error" in payload || cancelled) {
-          return;
-        }
-
-        setHistory((current) =>
-          current.map((item) => (item.id === payload.item.id ? payload.item : item)),
-        );
-      } catch {
-        // Keep the current item if refresh fails.
-      }
-    }
-
-    void refreshSelectedRecording();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedHistoryId]);
+  const hasPendingJobs = history.some((item) => !isTerminalStatus(item.status));
+  const currentText = selectedHistoryItem?.text ?? "";
+  const currentIsRtl = selectedHistoryItem?.isRtl ?? false;
+  const currentRecordingUrl =
+    selectedHistoryItem?.recordingUrl ??
+    (selectedHistoryId === activeUploadJobId ? previewUrl : null);
+  const currentFileName =
+    selectedHistoryItem?.fileName ?? file?.name ?? t.transcript;
+  const currentMimeType =
+    selectedHistoryItem?.mimeType ?? file?.type ?? "application/octet-stream";
+  const currentStatus = selectedHistoryItem?.status ?? null;
+  const currentProgress =
+    selectedHistoryItem?.id === activeUploadJobId &&
+    activeUploadProgress !== null &&
+    selectedHistoryItem?.status === "uploading"
+      ? activeUploadProgress
+      : selectedHistoryItem?.progress ?? null;
+  const currentError = selectedHistoryItem?.errorMessage ?? null;
 
   useEffect(() => {
     if (!copyState) {
@@ -405,17 +449,65 @@ export function Transcriber({
     };
   }, [history]);
 
+  useEffect(() => {
+    if (!userEmail || !hasPendingJobs || activeUploadJobId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function refreshJobs() {
+      try {
+        const response = await fetch("/api/transcriptions");
+        const payload = await parseJson<JobsResponse | { error: string }>(response);
+
+        if (!response.ok || "error" in payload || cancelled) {
+          return;
+        }
+
+        startTransition(() => {
+          setHistory(payload.items);
+        });
+
+        if (
+          selectedHistoryId &&
+          !payload.items.some((item) => item.id === selectedHistoryId)
+        ) {
+          setSelectedHistoryId(null);
+        }
+      } catch {
+        // Keep current UI state if polling fails.
+      }
+    }
+
+    void refreshJobs();
+    const interval = window.setInterval(() => {
+      void refreshJobs();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeUploadJobId, hasPendingJobs, selectedHistoryId, userEmail]);
+
   function handlePickedFile(nextFile: File | null) {
     setFile(nextFile);
     setError(null);
     setNotice(null);
-    setResult(null);
   }
 
   function clearPickedFile() {
     setFile(null);
     setError(null);
     setNotice(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  function resetPickedFile() {
+    setFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -432,6 +524,45 @@ export function Transcriber({
     }
   }
 
+  function updateHistoryItem(itemId: string, updater: (item: HistoryItem) => HistoryItem) {
+    setHistory((current) =>
+      current.map((item) => (item.id === itemId ? updater(item) : item)),
+    );
+  }
+
+  function statusLabel(status: string) {
+    return (
+      t.statusLabels[status as keyof typeof t.statusLabels] ??
+      t.statusLabels.queued
+    );
+  }
+
+  function statusTone(status: string) {
+    if (status === "completed") {
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    }
+
+    if (status === "failed") {
+      return "border-rose-200 bg-rose-50 text-rose-800";
+    }
+
+    return "border-sky-200 bg-sky-50 text-sky-900";
+  }
+
+  function historyPreview(item: HistoryItem) {
+    if (item.status === "failed") {
+      return item.errorMessage ?? statusLabel(item.status);
+    }
+
+    if (item.status !== "completed") {
+      return `${statusLabel(item.status)}${
+        item.progress > 0 ? ` · ${item.progress}%` : ""
+      }`;
+    }
+
+    return item.text;
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -442,13 +573,7 @@ export function Transcriber({
     }
 
     if (!file) {
-      setError(t.chooseOrPaste);
-      setNotice(null);
-      return;
-    }
-
-    if (fileTooLarge) {
-      setError(t.fileTooLarge);
+      setError(t.chooseFile);
       setNotice(null);
       return;
     }
@@ -456,39 +581,88 @@ export function Transcriber({
     setSubmitting(true);
     setError(null);
     setNotice(null);
-    setResult(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
+    let createdJobId: string | null = null;
 
     try {
-      const response = await fetch("/api/transcribe", {
+      const createResponse = await fetch("/api/transcribe", {
         method: "POST",
-        body: formData,
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+        }),
       });
 
-      const payload = await parseJson<TranscribeResult | { error: string }>(
-        response,
-      );
+      const createPayload = await parseJson<
+        CreateJobResponse | { error: string }
+      >(createResponse);
 
-      if (!response.ok || "error" in payload) {
+      if (!createResponse.ok || "error" in createPayload) {
         throw new Error(
-          "error" in payload ? payload.error : t.transcribeFailed,
+          "error" in createPayload ? createPayload.error : t.transcribeFailed,
         );
       }
 
-      setResult(payload);
+      createdJobId = createPayload.item.id;
+      setActiveUploadJobId(createdJobId);
+      setActiveUploadProgress(0);
+      setSelectedHistoryId(createdJobId);
+      setHistory((current) => [
+        createPayload.item,
+        ...current.filter((item) => item.id !== createPayload.item.id),
+      ]);
 
-      if (payload.historyItem) {
-        setHistory((current) => [
-          payload.historyItem!,
-          ...current.filter((item) => item.id !== payload.historyItem!.id),
-        ]);
-        setSelectedHistoryId(payload.historyItem.id);
-      } else {
-        setSelectedHistoryId(null);
+      await uploadFileToSignedUrl(createPayload.upload.signedUrl, file, (progress) => {
+        setActiveUploadProgress(progress);
+        updateHistoryItem(createdJobId!, (item) => ({
+          ...item,
+          progress,
+          status: "uploading",
+        }));
+      });
+
+      const processResponse = await fetch(`/api/transcribe/${createdJobId}/process`, {
+        method: "POST",
+      });
+
+      const processPayload = await parseJson<JobResponse | { error: string }>(
+        processResponse,
+      );
+
+      if (!processResponse.ok || "error" in processPayload) {
+        throw new Error(
+          "error" in processPayload ? processPayload.error : t.transcribeFailed,
+        );
       }
+
+      updateHistoryItem(createdJobId, () => processPayload.item);
+      setActiveUploadJobId(null);
+      setActiveUploadProgress(null);
+      setNotice(t.queuedNotice);
+      resetPickedFile();
     } catch (responseError) {
+      if (createdJobId) {
+        try {
+          await fetch(`/api/recordings/${createdJobId}`, {
+            method: "DELETE",
+          });
+        } catch {
+          // Keep the cleanup best-effort.
+        }
+
+        setHistory((current) => current.filter((item) => item.id !== createdJobId));
+
+        if (selectedHistoryId === createdJobId) {
+          setSelectedHistoryId(null);
+        }
+      }
+
+      setActiveUploadJobId(null);
+      setActiveUploadProgress(null);
       setError(
         responseError instanceof Error ? responseError.message : t.transcribeFailed,
       );
@@ -497,7 +671,7 @@ export function Transcriber({
     }
   }
 
-  async function deleteRecording() {
+  async function deleteRecording(itemId: string) {
     const confirmed = window.confirm(t.deletePrompt);
 
     if (!confirmed) {
@@ -505,7 +679,25 @@ export function Transcriber({
     }
 
     setError(null);
-    setNotice(t.deleteUnavailable);
+
+    try {
+      const response = await fetch(`/api/recordings/${itemId}`, {
+        method: "DELETE",
+      });
+
+      const payload = await parseJson<{ id: string } | { error: string }>(response);
+
+      if (!response.ok || "error" in payload) {
+        throw new Error("error" in payload ? payload.error : t.deleteFailed);
+      }
+
+      setHistory((current) => current.filter((item) => item.id !== itemId));
+      if (selectedHistoryId === itemId) {
+        setSelectedHistoryId(null);
+      }
+    } catch {
+      setError(t.deleteFailed);
+    }
   }
 
   function toggleHistoryItem(itemId: string, canExpand: boolean) {
@@ -605,22 +797,15 @@ export function Transcriber({
                     <p className="text-sm font-medium text-slate-950">{file.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{formatBytes(file.size)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {fileTooLarge ? (
-                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-                        {t.tooLargeBadge}
-                      </span>
-                    ) : null}
-                    <button
-                      aria-label={t.clearFile}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                      onClick={clearPickedFile}
-                      title={t.clearFile}
-                      type="button"
-                    >
-                      <CloseIcon />
-                    </button>
-                  </div>
+                  <button
+                    aria-label={t.clearFile}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    onClick={clearPickedFile}
+                    title={t.clearFile}
+                    type="button"
+                  >
+                    <CloseIcon />
+                  </button>
                 </div>
                 {previewUrl ? (
                   <div className="mt-4 flex-1">
@@ -649,7 +834,7 @@ export function Transcriber({
               </button>
             )}
 
-            {!hasOpenAIKey ? (
+            {!hasOpenAIKey || !historyEnabled ? (
               <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 {t.uploadsNotReady}
               </div>
@@ -683,14 +868,18 @@ export function Transcriber({
               className="inline-flex min-h-12 items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
               disabled={
                 !hasOpenAIKey ||
+                !historyEnabled ||
                 !file ||
-                fileTooLarge ||
                 submitting ||
                 (requiresGoogleSignIn && !userEmail)
               }
               type="submit"
             >
-              {submitting ? t.working : t.transcribe}
+              {activeUploadProgress !== null
+                ? `${t.uploading} ${activeUploadProgress}%`
+                : submitting
+                  ? t.working
+                  : t.transcribe}
             </button>
           </form>
         </section>
@@ -702,7 +891,7 @@ export function Transcriber({
                 {t.transcript}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                {currentText ? currentFileName : t.transcriptPlaceholder}
+                {selectedHistoryItem ? currentFileName : t.transcriptPlaceholder}
               </p>
             </div>
             {currentText ? (
@@ -733,7 +922,39 @@ export function Transcriber({
             </div>
           ) : null}
 
-          {currentText ? (
+          {selectedHistoryItem && currentStatus !== "completed" ? (
+            <div className="mt-5 flex flex-1 flex-col justify-center rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,#fcfdff_0%,#f5f8ff_100%)] p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-950">{t.statusTitle}</p>
+                  <p className="mt-1 text-sm text-slate-500">{t.statusHint}</p>
+                </div>
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${statusTone(
+                    currentStatus!,
+                  )}`}
+                >
+                  {statusLabel(currentStatus!)}
+                </span>
+              </div>
+              {currentProgress !== null ? (
+                <>
+                  <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        currentStatus === "failed" ? "bg-rose-400" : "bg-slate-950"
+                      }`}
+                      style={{ width: `${Math.max(8, currentProgress)}%` }}
+                    />
+                  </div>
+                  <p className="mt-3 text-sm text-slate-500">{currentProgress}%</p>
+                </>
+              ) : null}
+              {currentError ? (
+                <p className="mt-4 text-sm leading-7 text-rose-700">{currentError}</p>
+              ) : null}
+            </div>
+          ) : currentText ? (
             <div className="mt-5 flex-1 rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,#fcfdff_0%,#f5f8ff_100%)] p-1">
               <textarea
                 className={`min-h-[22rem] w-full resize-none rounded-[1.25rem] bg-transparent px-4 py-4 text-sm leading-8 text-slate-800 outline-none sm:text-[15px] ${
@@ -770,7 +991,8 @@ export function Transcriber({
         {history.length > 0 ? (
           <div className="mt-5 grid gap-3">
             {history.map((item) => {
-              const canExpand = overflowingHistoryIds[item.id] ?? false;
+              const canExpand =
+                item.status === "completed" && (overflowingHistoryIds[item.id] ?? false);
               const isOpen = item.id === selectedHistoryId;
 
               return (
@@ -785,17 +1007,20 @@ export function Transcriber({
                   <div className="flex min-w-0 items-start justify-between gap-4">
                     <button
                       className="min-w-0 flex-1 text-left"
-                      onClick={() => {
-                        toggleHistoryItem(item.id, canExpand);
-                      }}
+                      onClick={() => setSelectedHistoryId(item.id)}
                       type="button"
                     >
-                      <p className="truncate text-sm font-medium">{item.fileName}</p>
-                      <p
-                        className={`mt-1 text-xs ${
-                          isOpen ? "text-slate-500" : "text-slate-500"
-                        }`}
-                      >
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium">{item.fileName}</p>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusTone(
+                            item.status,
+                          )}`}
+                        >
+                          {statusLabel(item.status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
                         {formatDate(item.createdAt, locale)} · {formatBytes(item.size)}
                       </p>
                     </button>
@@ -816,19 +1041,21 @@ export function Transcriber({
                           <ChevronIcon open={isOpen} />
                         </button>
                       ) : null}
-                      <button
-                        aria-label={`${t.copyTranscript} ${item.fileName}`}
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
-                          isOpen
-                            ? "border-sky-200 bg-white/75 text-slate-700 hover:bg-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                        }`}
-                        onClick={() => copyText(item.id, item.text)}
-                        title={copyState === item.id ? t.copied : t.copyTranscript}
-                        type="button"
-                      >
-                        <CopyIcon />
-                      </button>
+                      {item.text ? (
+                        <button
+                          aria-label={`${t.copyTranscript} ${item.fileName}`}
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                            isOpen
+                              ? "border-sky-200 bg-white/75 text-slate-700 hover:bg-white"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                          onClick={() => copyText(item.id, item.text)}
+                          title={copyState === item.id ? t.copied : t.copyTranscript}
+                          type="button"
+                        >
+                          <CopyIcon />
+                        </button>
+                      ) : null}
                       <button
                         aria-label={`${t.delete} ${item.fileName}`}
                         className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
@@ -836,7 +1063,7 @@ export function Transcriber({
                             ? "border-sky-200 bg-white/75 text-slate-700 hover:bg-white"
                             : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                         }`}
-                        onClick={() => deleteRecording()}
+                        onClick={() => void deleteRecording(item.id)}
                         title={t.delete}
                         type="button"
                       >
@@ -866,29 +1093,33 @@ export function Transcriber({
                   ) : null}
 
                   <button
-                    className={`mt-4 block min-w-0 w-full text-left text-sm leading-7 ${
+                    className={`mt-4 block w-full min-w-0 text-left text-sm leading-7 ${
                       isOpen ? "text-slate-700" : "text-slate-600"
                     }`}
                     dir={item.isRtl ? "rtl" : "ltr"}
                     onClick={() => {
-                      toggleHistoryItem(item.id, canExpand);
+                      if (item.status === "completed") {
+                        toggleHistoryItem(item.id, canExpand);
+                      } else {
+                        setSelectedHistoryId(item.id);
+                      }
                     }}
                     type="button"
                   >
-                    {isOpen ? (
-                      <div
-                        className="max-h-80 overflow-x-hidden overflow-y-auto break-words whitespace-pre-wrap"
-                      >
+                    {isOpen && item.status === "completed" ? (
+                      <div className="max-h-80 overflow-x-hidden overflow-y-auto break-words whitespace-pre-wrap">
                         {item.text}
                       </div>
                     ) : (
                       <span
-                        className={`${canExpand ? "line-clamp-4" : ""} break-words whitespace-pre-wrap`}
+                        className={`break-words whitespace-pre-wrap ${
+                          item.status === "completed" && canExpand ? "line-clamp-4" : ""
+                        }`}
                         ref={(element) => {
                           historyPreviewRefs.current[item.id] = element;
                         }}
                       >
-                        {item.text}
+                        {historyPreview(item)}
                       </span>
                     )}
                   </button>

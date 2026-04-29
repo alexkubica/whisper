@@ -1,15 +1,38 @@
-import { hasSupabaseAuth } from "@/lib/env";
-import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
+import { createTranscriptionJob } from "@/db/queries";
+import { hasDatabaseUrl, hasSupabaseAuth } from "@/lib/env";
+import { serializeHistoryItem } from "@/lib/history";
 import {
   ACCEPTED_EXTENSIONS,
+  MODEL,
   MAX_VERCEL_UPLOAD_BYTES,
   getExtension,
-  transcribeAndPersistFile,
 } from "@/lib/transcription";
+import { createSignedRecordingUpload } from "@/lib/supabase/admin";
+import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+type CreateJobPayload = {
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+};
+
+async function getSignedInUserId() {
+  const supabase = await createRouteHandlerClient();
+
+  if (!supabase) {
+    return null;
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return user?.id ?? null;
+}
 
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
@@ -24,6 +47,70 @@ export async function POST(request: Request) {
       { error: "Supabase Google auth must be configured." },
       { status: 500 },
     );
+  }
+
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json(
+      { error: "DATABASE_URL is required for async transcriptions." },
+      { status: 500 },
+    );
+  }
+
+  const userId = await getSignedInUserId();
+
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Sign in with Google before transcribing." },
+      { status: 401 },
+    );
+  }
+
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = (await request.json()) as CreateJobPayload;
+    const fileName = body.fileName?.trim() ?? "";
+    const mimeType = body.mimeType?.trim() || "application/octet-stream";
+    const size = typeof body.size === "number" ? body.size : Number.NaN;
+
+    if (!fileName || !Number.isFinite(size) || size <= 0) {
+      return NextResponse.json({ error: "Missing file metadata." }, { status: 400 });
+    }
+
+    if (!ACCEPTED_EXTENSIONS.has(getExtension(fileName))) {
+      return NextResponse.json(
+        { error: "Unsupported file type." },
+        { status: 400 },
+      );
+    }
+
+    const upload = await createSignedRecordingUpload({ fileName, userId });
+
+    if (!upload) {
+      return NextResponse.json(
+        { error: "Supabase Storage admin is not configured." },
+        { status: 500 },
+      );
+    }
+
+    const job = await createTranscriptionJob({
+      userId,
+      fileName,
+      mimeType,
+      model: MODEL,
+      size,
+      storageBucket: upload.bucket,
+      storagePath: upload.path,
+    });
+
+    return NextResponse.json({
+      item: serializeHistoryItem(job, null),
+      upload: {
+        path: upload.path,
+        signedUrl: upload.signedUrl,
+        token: upload.token,
+      },
+    });
   }
 
   const formData = await request.formData();
@@ -44,45 +131,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Files over 4.5 MB will be rejected by Vercel Functions in this simple setup.",
+          "Shared uploads over 4.5 MB still need to be opened in the app first.",
       },
       { status: 413 },
     );
   }
 
-  try {
-    let userId: string | null = null;
-    const supabase = await createRouteHandlerClient();
-
-    if (supabase) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      userId = user?.id ?? null;
-    }
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Sign in with Google before transcribing." },
-        { status: 401 },
-      );
-    }
-
-    const payload = await transcribeAndPersistFile(input, userId);
-
-    return NextResponse.json(payload);
-  } catch (error) {
-    console.error(error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "OpenAI transcription failed.",
-      },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json(
+    { error: "Direct uploads must be created from the app." },
+    { status: 400 },
+  );
 }

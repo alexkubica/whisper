@@ -8,7 +8,10 @@ export type HistoryItem = {
   model: string;
   isArchived: boolean;
   isRtl: boolean;
+  errorMessage: string | null;
+  progress: number;
   recordingUrl: string | null;
+  status: string;
   text: string;
   createdAt: string;
 };
@@ -32,7 +35,10 @@ export function serializeHistoryItem(
     model: record.model,
     isArchived: Boolean(record.archivedAt),
     isRtl: isPredominantlyRtl(record.text),
+    errorMessage: record.errorMessage ?? null,
+    progress: record.progress,
     recordingUrl,
+    status: record.status,
     text: record.text,
     createdAt: record.createdAt.toISOString(),
   };

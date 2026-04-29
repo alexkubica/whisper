@@ -1,12 +1,15 @@
+import { createTranscriptionJob } from "@/db/queries";
+import { uploadRecording } from "@/lib/supabase/admin";
 import { hasSupabaseAuth } from "@/lib/env";
 import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
 import {
   ACCEPTED_EXTENSIONS,
+  MODEL,
   MAX_VERCEL_UPLOAD_BYTES,
   getExtension,
-  transcribeAndPersistFile,
+  processTranscriptionJob,
 } from "@/lib/transcription";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -58,13 +61,38 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload = await transcribeAndPersistFile(input, user.id);
+    const storedRecording = await uploadRecording({
+      buffer: Buffer.from(await input.arrayBuffer()),
+      fileName: input.name,
+      mimeType: input.type || "application/octet-stream",
+      userId: user.id,
+    });
+
+    if (!storedRecording) {
+      return redirectWithStatus(request, "config-error");
+    }
+
+    const job = await createTranscriptionJob({
+      userId: user.id,
+      fileName: input.name,
+      mimeType: input.type || "application/octet-stream",
+      model: MODEL,
+      size: input.size,
+      storageBucket: storedRecording.bucket,
+      storagePath: storedRecording.path,
+    });
+
+    after(async () => {
+      try {
+        await processTranscriptionJob(job.id, user.id);
+      } catch (error) {
+        console.error(error);
+      }
+    });
 
     return NextResponse.redirect(
       new URL(
-        payload.historyItem?.id
-          ? `/app?selected=${payload.historyItem.id}&share=ok`
-          : "/app?share=ok",
+        `/app?selected=${job.id}&share=ok`,
         request.url,
       ),
     );

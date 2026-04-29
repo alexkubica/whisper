@@ -9,6 +9,17 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+export const transcriptionStatuses = [
+  "uploading",
+  "queued",
+  "extracting",
+  "transcribing",
+  "completed",
+  "failed",
+] as const;
+
+export type TranscriptionStatus = (typeof transcriptionStatuses)[number];
+
 export const transcriptions = pgTable(
   "transcriptions",
   {
@@ -20,7 +31,10 @@ export const transcriptions = pgTable(
     model: text("model").notNull(),
     storageBucket: text("storage_bucket"),
     storagePath: text("storage_path"),
-    text: text("text").notNull(),
+    status: text("status").default("completed").notNull(),
+    progress: integer("progress").default(100).notNull(),
+    errorMessage: text("error_message"),
+    text: text("text").default("").notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()

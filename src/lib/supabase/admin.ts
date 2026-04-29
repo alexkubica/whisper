@@ -43,6 +43,48 @@ async function ensureStorageBucketExists(bucket: string) {
   }
 }
 
+export function createRecordingObjectPath(userId: string, fileName: string) {
+  return `${userId}/${Date.now()}-${crypto.randomUUID()}-${fileName.replace(/[^a-z0-9-_.]/gi, "_")}`;
+}
+
+export async function createSignedRecordingUpload(input: {
+  userId: string;
+  fileName: string;
+}) {
+  const client = createSupabaseAdminClient();
+
+  if (!client) {
+    return null;
+  }
+
+  const bucket = getSupabaseStorageBucket();
+  await ensureStorageBucketExists(bucket);
+  const path = createRecordingObjectPath(input.userId, input.fileName);
+
+  let { data, error } = await client.storage
+    .from(bucket)
+    .createSignedUploadUrl(path);
+
+  if (error?.message === "Bucket not found") {
+    await ensureStorageBucketExists(bucket);
+
+    ({ data, error } = await client.storage.from(bucket).createSignedUploadUrl(path));
+  }
+
+  if (error || !data) {
+    throw new Error(
+      `Failed to prepare direct upload in bucket "${bucket}": ${error?.message ?? "Unknown error."}`,
+    );
+  }
+
+  return {
+    bucket,
+    path,
+    signedUrl: data.signedUrl,
+    token: data.token,
+  };
+}
+
 export async function uploadRecording(input: {
   userId: string;
   fileName: string;
@@ -57,7 +99,7 @@ export async function uploadRecording(input: {
 
   const bucket = getSupabaseStorageBucket();
   await ensureStorageBucketExists(bucket);
-  const path = `${input.userId}/${Date.now()}-${crypto.randomUUID()}-${input.fileName.replace(/[^a-z0-9-_.]/gi, "_")}`;
+  const path = createRecordingObjectPath(input.userId, input.fileName);
 
   let { error } = await client.storage.from(bucket).upload(path, input.buffer, {
     contentType: input.mimeType,

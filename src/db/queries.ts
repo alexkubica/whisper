@@ -1,6 +1,10 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "./client";
-import { transcriptions, waitlistSignups } from "./schema";
+import {
+  type TranscriptionStatus,
+  transcriptions,
+  waitlistSignups,
+} from "./schema";
 
 export async function listRecentTranscriptionsByUser(
   userId: string,
@@ -30,6 +34,51 @@ export async function createTranscriptionHistoryItem(input: {
   const [row] = await db.insert(transcriptions).values(input).returning();
 
   return row;
+}
+
+export async function createTranscriptionJob(input: {
+  userId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  model: string;
+  storageBucket: string | null;
+  storagePath: string | null;
+}) {
+  const db = getDb();
+
+  const [row] = await db
+    .insert(transcriptions)
+    .values({
+      ...input,
+      errorMessage: null,
+      progress: 0,
+      status: "uploading",
+      text: "",
+    })
+    .returning();
+
+  return row;
+}
+
+export async function updateTranscriptionJob(
+  id: string,
+  input: {
+    errorMessage?: string | null;
+    progress?: number;
+    status?: TranscriptionStatus;
+    text?: string;
+  },
+) {
+  const db = getDb();
+
+  const [row] = await db
+    .update(transcriptions)
+    .set(input)
+    .where(eq(transcriptions.id, id))
+    .returning();
+
+  return row ?? null;
 }
 
 export async function setTranscriptionArchivedState(
