@@ -7,6 +7,7 @@ import { serializeHistoryItem } from "@/lib/history";
 import { deleteRecordingObject, createSignedRecordingUrl } from "@/lib/supabase/admin";
 import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { NextResponse } from "next/server";
+import { isAuthorizedUser } from "@/lib/auth-authorization";
 
 async function getSignedInUserId() {
   const supabase = await createRouteHandlerClient();
@@ -19,7 +20,7 @@ async function getSignedInUserId() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return user?.id ?? null;
+  return isAuthorizedUser(user) ? user.id : null;
 }
 
 export async function GET(

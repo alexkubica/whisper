@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
+import { isAuthorizedUser } from "@/lib/auth-authorization";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next") ?? "/app";
-  const redirectTo = new URL(next.startsWith("/") ? next : "/app", requestUrl.origin);
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/app";
+  const redirectTo = new URL(safeNext, requestUrl.origin);
 
   if (!code) {
     return NextResponse.redirect(redirectTo);
@@ -27,6 +29,17 @@ export async function GET(request: Request) {
       console.error("Auth callback exchangeCodeForSession error:", error.message);
       return NextResponse.redirect(
         new URL(`/login?error=${encodeURIComponent(error.message)}`, requestUrl.origin),
+      );
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!isAuthorizedUser(user)) {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(
+        new URL("/login?error=unauthorized_email", requestUrl.origin),
       );
     }
 

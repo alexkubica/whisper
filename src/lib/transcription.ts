@@ -16,11 +16,11 @@ import { promisify } from "node:util";
 import ffmpegStatic from "ffmpeg-static";
 import OpenAI from "openai";
 import { toFile } from "openai/uploads";
+import { resolveTranscribeModel } from "./transcription-model";
 
 const execFileAsync = promisify(execFile);
 
-export const MODEL =
-  process.env.OPENAI_TRANSCRIBE_MODEL ?? "gpt-4o-mini-transcribe";
+export const MODEL = resolveTranscribeModel();
 
 export const MAX_VERCEL_UPLOAD_BYTES = 4.5 * 1024 * 1024;
 export const MAX_TRANSCRIBE_CHUNK_BYTES = 24 * 1024 * 1024;
@@ -60,7 +60,10 @@ async function resolveFfmpegPath() {
   const candidates = [
     ffmpegStatic,
     ffmpegStatic?.startsWith("/ROOT/")
-      ? join(process.cwd(), ffmpegStatic.slice("/ROOT/".length))
+      ? join(
+          /* turbopackIgnore: true */ process.cwd(),
+          ffmpegStatic.slice("/ROOT/".length),
+        )
       : null,
     join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
     "/opt/homebrew/bin/ffmpeg",

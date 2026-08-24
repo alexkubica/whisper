@@ -10,6 +10,7 @@ import {
 import { createSignedRecordingUpload } from "@/lib/supabase/admin";
 import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
 import { NextResponse } from "next/server";
+import { isAuthorizedUser } from "@/lib/auth-authorization";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -31,7 +32,7 @@ async function getSignedInUserId() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return user?.id ?? null;
+  return isAuthorizedUser(user) ? user.id : null;
 }
 
 export async function POST(request: Request) {

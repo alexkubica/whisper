@@ -14,6 +14,8 @@ import { serializeHistoryItem } from "@/lib/history";
 import { LOCALE_COOKIE, type Locale, isLocale } from "@/lib/locale";
 import { createSignedRecordingUrl } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveTranscribeModel } from "@/lib/transcription-model";
+import { isAuthorizedUser } from "@/lib/auth-authorization";
 
 function localeHref(locale: Locale, redirectTo: string) {
   return `/api/locale?locale=${locale}&redirectTo=${encodeURIComponent(redirectTo)}`;
@@ -45,8 +47,10 @@ export default async function AppPage({
         data: { user },
       } = await supabase.auth.getUser();
 
-      userEmail = user?.email ?? null;
-      userId = user?.id ?? null;
+      if (isAuthorizedUser(user)) {
+        userEmail = user.email ?? null;
+        userId = user.id;
+      }
     }
   }
 
@@ -120,6 +124,7 @@ export default async function AppPage({
           locale={locale}
           shareStatus={shareStatus}
           recordingStorageEnabled={hasSupabaseStorageAdmin()}
+          transcribeModel={resolveTranscribeModel()}
           userEmail={userEmail}
         />
       </div>

@@ -7,7 +7,7 @@ import {
   isLocale,
 } from "@/lib/locale";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const url = new URL(request.url);
   const localeParam = url.searchParams.get("lang");
   const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value;

@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 
 const MAX_SUBMISSIONS_PER_IP = 3;
 const waitlistSubmissionsByIp = new Map<string, number>();
+const MAX_CONTACT_LENGTH = 320;
 
 const copy = {
   en: {
@@ -36,6 +37,10 @@ export async function POST(request: Request) {
   const locale: Locale = isLocale(localeValue) ? localeValue : "en";
   const t = copy[locale];
 
+  if (process.env.WAITLIST_ENABLED !== "true") {
+    return NextResponse.json({ error: t.notReady }, { status: 404 });
+  }
+
   if (!hasDatabaseUrl()) {
     return NextResponse.json(
       { error: t.notReady },
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as { contact?: string };
   const contact = body.contact?.trim() ?? "";
 
-  if (!contact) {
+  if (!contact || contact.length > MAX_CONTACT_LENGTH) {
     return NextResponse.json({ error: t.invalid }, { status: 400 });
   }
 

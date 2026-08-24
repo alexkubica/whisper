@@ -10,6 +10,7 @@ import {
   processTranscriptionJob,
 } from "@/lib/transcription";
 import { after, NextResponse } from "next/server";
+import { isAuthorizedUser } from "@/lib/auth-authorization";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.id) {
+  if (!isAuthorizedUser(user)) {
     return redirectWithStatus(request, "signin-required");
   }
 

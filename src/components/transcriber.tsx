@@ -26,6 +26,13 @@ const ACCEPTED_TYPES = [
   ".webm",
 ];
 
+const TRANSCRIPTION_PRICE_PER_MINUTE_USD: Record<string, number> = {
+  "gpt-4o-mini-transcribe": 0.003,
+  "gpt-4o-transcribe": 0.006,
+  "gpt-4o-transcribe-diarize": 0.006,
+  "whisper-1": 0.006,
+};
+
 type TranscriberProps = {
   authEnabled: boolean;
   historyEnabled: boolean;
@@ -35,6 +42,7 @@ type TranscriberProps = {
   locale: Locale;
   recordingStorageEnabled: boolean;
   shareStatus: string | null;
+  transcribeModel: string;
   userEmail: string | null;
 };
 
@@ -59,11 +67,35 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function formatDuration(seconds: number) {
+  const total = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainingSeconds = total % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(
+      remainingSeconds,
+    ).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
 function formatDate(value: string, locale: Locale) {
   return new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "en-US", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatUsd(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: value < 0.01 ? 4 : 2,
+    minimumFractionDigits: value < 0.01 ? 4 : 2,
+    style: "currency",
+  }).format(value);
 }
 
 function getFileKind(file: { name: string; type: string } | null) {
@@ -262,6 +294,13 @@ const copy = {
     signInToKeepHistory: "Sign in to keep history.",
     delete: "Delete",
     queuedNotice: "Upload finished. Processing in the background.",
+    estimateTitle: "Estimated API cost",
+    estimateWaiting: "Duration appears after file metadata loads.",
+    estimateUnknownModel: "No built-in price for this model.",
+    estimateConfirm: "Estimated OpenAI API cost: {cost}. Continue?",
+    estimateUnknownConfirm: "OpenAI API cost could not be estimated. Continue?",
+    modelLabel: "Model",
+    durationLabel: "Duration",
     statusTitle: "Status",
     statusHint: "This job keeps running after the page changes.",
     statusLabels: {
@@ -317,6 +356,13 @@ const copy = {
     signInToKeepHistory: "התחברו כדי לשמור היסטוריה.",
     delete: "מחיקה",
     queuedNotice: "ההעלאה הסתיימה. העיבוד ממשיך ברקע.",
+    estimateTitle: "עלות API משוערת",
+    estimateWaiting: "משך ההקלטה יופיע אחרי טעינת פרטי הקובץ.",
+    estimateUnknownModel: "אין מחיר מובנה למודל הזה.",
+    estimateConfirm: "עלות OpenAI API משוערת: {cost}. להמשיך?",
+    estimateUnknownConfirm: "לא הצלחנו להעריך את עלות OpenAI API. להמשיך?",
+    modelLabel: "מודל",
+    durationLabel: "משך",
     statusTitle: "סטטוס",
     statusHint: "העבודה ממשיכה גם אם מרעננים או עוברים עמוד.",
     statusLabels: {
@@ -339,6 +385,7 @@ export function Transcriber({
   locale,
   recordingStorageEnabled,
   shareStatus,
+  transcribeModel,
   userEmail,
 }: TranscriberProps) {
   const requiresGoogleSignIn = authEnabled;
@@ -358,6 +405,9 @@ export function Transcriber({
   >({});
   const [activeUploadJobId, setActiveUploadJobId] = useState<string | null>(null);
   const [activeUploadProgress, setActiveUploadProgress] = useState<number | null>(
+    null,
+  );
+  const [fileDurationSeconds, setFileDurationSeconds] = useState<number | null>(
     null,
   );
   const historyPreviewRefs = useRef<Record<string, HTMLSpanElement | null>>({});
@@ -409,6 +459,11 @@ export function Transcriber({
       ? activeUploadProgress
       : selectedHistoryItem?.progress ?? null;
   const currentError = selectedHistoryItem?.errorMessage ?? null;
+  const pricePerMinute = TRANSCRIPTION_PRICE_PER_MINUTE_USD[transcribeModel];
+  const estimatedCost =
+    fileDurationSeconds !== null && pricePerMinute !== undefined
+      ? (fileDurationSeconds / 60) * pricePerMinute
+      : null;
 
   useEffect(() => {
     if (!copyState) {
@@ -493,12 +548,14 @@ export function Transcriber({
 
   function handlePickedFile(nextFile: File | null) {
     setFile(nextFile);
+    setFileDurationSeconds(null);
     setError(null);
     setNotice(null);
   }
 
   function clearPickedFile() {
     setFile(null);
+    setFileDurationSeconds(null);
     setError(null);
     setNotice(null);
     if (fileInputRef.current) {
@@ -508,8 +565,17 @@ export function Transcriber({
 
   function resetPickedFile() {
     setFile(null);
+    setFileDurationSeconds(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  }
+
+  function handleLoadedMetadata(element: HTMLAudioElement | HTMLVideoElement) {
+    const { duration } = element;
+
+    if (Number.isFinite(duration) && duration > 0) {
+      setFileDurationSeconds(duration);
     }
   }
 
@@ -575,6 +641,16 @@ export function Transcriber({
     if (!file) {
       setError(t.chooseFile);
       setNotice(null);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      estimatedCost === null
+        ? t.estimateUnknownConfirm
+        : t.estimateConfirm.replace("{cost}", formatUsd(estimatedCost)),
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -807,17 +883,54 @@ export function Transcriber({
                     <CloseIcon />
                   </button>
                 </div>
+                <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-slate-950">
+                      {t.estimateTitle}
+                    </span>
+                    <span className="text-slate-500">
+                      {t.modelLabel}: {transcribeModel}
+                    </span>
+                  </div>
+                  {fileDurationSeconds !== null ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <span>
+                        {t.durationLabel}: {formatDuration(fileDurationSeconds)}
+                      </span>
+                      {estimatedCost !== null ? (
+                        <span className="font-medium text-slate-950">
+                          {formatUsd(estimatedCost)}
+                        </span>
+                      ) : (
+                        <span>{t.estimateUnknownModel}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-slate-500">{t.estimateWaiting}</p>
+                  )}
+                </div>
                 {previewUrl ? (
                   <div className="mt-4 flex-1">
                     {getFileKind(file) === "video" ? (
                       <video
                         className="h-full max-h-64 w-full rounded-[1.25rem] bg-slate-950"
                         controls
+                        onLoadedMetadata={(event) =>
+                          handleLoadedMetadata(event.currentTarget)
+                        }
                         preload="metadata"
                         src={previewUrl}
                       />
                     ) : (
-                      <audio className="w-full" controls preload="metadata" src={previewUrl} />
+                      <audio
+                        className="w-full"
+                        controls
+                        onLoadedMetadata={(event) =>
+                          handleLoadedMetadata(event.currentTarget)
+                        }
+                        preload="metadata"
+                        src={previewUrl}
+                      />
                     )}
                   </div>
                 ) : null}
